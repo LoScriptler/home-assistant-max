@@ -1,0 +1,10 @@
+{
+    "domain": "max_for_home",
+    "name": "MAX For Home",
+    "documentation": "https://lorenzoante.com",
+    "dependencies": [],
+    "codeowners": [],
+    "version": "1.0.0",
+    "requirements": ["aiohttp"]
+  }
+  

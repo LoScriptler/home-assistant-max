@@ -1,0 +1,1 @@
+DOMAIN = "max_for_home"
