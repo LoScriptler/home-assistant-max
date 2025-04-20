@@ -16,7 +16,7 @@ from .const import DOMAIN, CONF_EMAIL, CONF_PASSWORD, CONF_DEVICE_CODE
 _LOGGER = logging.getLogger(__name__)
 
 # Endpoint API fisso (modifica se serve renderlo configurabile)
-MAX_EP: Final = "https://api.max.home/door"
+API_ENDPOINT: Final = "https://munl.altervista.org/GestioneAccountMAX/GestioneApplicativi/GetData.php"
 
 
 async def post_max(email: str, password: str, device_id: str) -> httpx.Response:
