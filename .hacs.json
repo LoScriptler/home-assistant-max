@@ -1,7 +1,5 @@
 {
-  "name": "max-for-home",
-  "homeassistant": "2023.8.0",
-  "zip_release": true,
-  "filename": "max-for-home.zip",
-  "render_readme": true
+  "name": "Max For Home",
+  "country": "IT",
+  "homeassistant": "2025.04.0"
 }

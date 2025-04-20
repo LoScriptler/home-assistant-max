@@ -1,10 +1,10 @@
 {
-    "domain": "max_for_home",
-    "name": "MAX For Home",
-    "documentation": "https://lorenzoante.com",
-    "dependencies": [],
-    "codeowners": [],
-    "version": "1.0.0",
-    "requirements": ["aiohttp"]
-  }
-  
+  "domain": "max_for_home",
+  "name": "Max For Home",
+  "version": "0.0.1",
+  "documentation": "https://github.com/LoScriptler/home-assistant-max/blob/main/README.md",
+  "requirements": [],     
+  "codeowners": ["@LoScriptler"],
+  "iot_class": "cloud_push",
+  "config_flow": false        
+}
