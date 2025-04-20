@@ -1,7 +1,7 @@
 {
   "domain": "max_for_home",
   "name": "Max For Home",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "documentation": "https://github.com/LoScriptler/home-assistant-max/blob/main/README.md",
   "requirements": [],     
   "codeowners": ["@LoScriptler"],
