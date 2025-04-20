@@ -11,12 +11,19 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, CONF_EMAIL, CONF_PASSWORD, CONF_DEVICE_CODE
+from .const import (
+    DOMAIN,
+    CONF_EMAIL,
+    CONF_PASSWORD,
+    CONF_DEVICE_CODE,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
-# Endpoint API fisso (modifica se serve renderlo configurabile)
-API_ENDPOINT: Final = "https://munl.altervista.org/GestioneAccountMAX/GestioneApplicativi/GetData.php"
+# Endpoint API fisso (modifica se preferisci renderlo configurabile)
+API_ENDPOINT: Final = (
+    "https://munl.altervista.org/GestioneAccountMAX/GestioneApplicativi/GetData.php"
+)
 
 
 async def post_max(email: str, password: str, device_id: str) -> httpx.Response:
@@ -32,7 +39,7 @@ async def post_max(email: str, password: str, device_id: str) -> httpx.Response:
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.post(MAX_EP, data=data)
+            response = await client.post(API_ENDPOINT, data=data)  # <‑‑ costante corretta
             response.raise_for_status()
             _LOGGER.info("Dispositivo %s attivato correttamente", device_id)
             return response
