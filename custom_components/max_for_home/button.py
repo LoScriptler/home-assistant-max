@@ -8,10 +8,9 @@ from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.components.climate import ClimateEntity
-from homeassistant.components.climate.const import (
-    HVAC_MODE_HEAT, HVAC_MODE_OFF, SUPPORT_TARGET_TEMPERATURE
-)
+from homeassistant.components.climate import ClimateEntity, HVACMode
+from homeassistant.components.climate import ClimateEntityFeature
+
 
 from .const import (
     DOMAIN,
@@ -175,10 +174,8 @@ class MaxDoorButton(ButtonEntity):
 
 
 class MaxThermostatEntity(ClimateEntity):
-    """Representa un unico dispositivo termostato con temperatura, umidità e accendi/spegni"""
-
-    _attr_supported_features = SUPPORT_TARGET_TEMPERATURE
-    _attr_hvac_modes = [HVAC_MODE_OFF, HVAC_MODE_HEAT]
+    _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
+    _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
 
     def __init__(self, device_code: str, email: str, password: str) -> None:
         self._device_code = device_code
