@@ -12,7 +12,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema({
 })
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Flusso di configurazione per Max For Home."""
+    """Confug flow for MAX for Home."""
 
     VERSION = 1
 
@@ -21,11 +21,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            # Qui potresti validare le credenziali con una chiamata HTTP asincrona.
-            # Se tutto ok, creiamo l'entry di configurazione.
+
             return self.async_create_entry(
                 title=f"Device {user_input[CONF_DEVICE_CODE]}",
-                data=user_input,  # sarà un dict con email, password, device_code
+                data=user_input, 
             )
 
         return self.async_show_form(
