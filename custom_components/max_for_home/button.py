@@ -133,9 +133,8 @@ async def async_setup_entry(
         _LOGGER.error("Impossibile determinare tipo dispositivo %s: %s", device_code, err)
         return
 
-    entities = []
+    entities: list[ButtonEntity | ClimateEntity] = []
 
-    # 2) In base al tipo, preparo le entity
     if device_kind == "cancello":
         entities.append(MaxGateButton(device_code, email, password))
 
@@ -143,13 +142,17 @@ async def async_setup_entry(
         entities.append(MaxDoorButton(device_code, email, password))
 
     elif device_kind == "termostato":
-        entities.append([MaxThermostatEntity(device_code, email, password)], False)
+        # qui appendi *solo* l’entità Climate, senza lista o flag aggiuntivi
+        entities.append(MaxThermostatEntity(device_code, email, password))
 
     else:
-        _LOGGER.warning("Tipo dispositivo %s non riconosciuto: %s", device_code, device_kind)
+        _LOGGER.warning(
+            "Tipo dispositivo non supportato: %s (device %s)",
+            device_kind,
+            device_code,
+        )
         return
 
-    # 3) Aggiungo tutte le entità
     async_add_entities(entities, update_before_add=False)
 
 #############################################################
