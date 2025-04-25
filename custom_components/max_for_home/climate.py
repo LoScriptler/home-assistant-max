@@ -90,104 +90,6 @@ async def async_setup_entry(
     _LOGGER.debug("Thermostat entity added for device: %s", device_code)
 
 
-from __future__ import annotations
-
-import logging
-from datetime import timedelta
-from typing import Final
-
-import httpx
-from homeassistant.components.climate import (
-    ClimateEntity,
-    HVACMode,
-    ClimateEntityFeature,
-)
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import (
-    DataUpdateCoordinator,
-    CoordinatorEntity,
-)
-
-from .const import DOMAIN, CONF_EMAIL, CONF_PASSWORD, CONF_DEVICE_CODE
-
-_LOGGER = logging.getLogger(__name__)
-
-API_ENDPOINT: Final = (
-    "https://munl.altervista.org/GestioneAccountMAX/GestioneApplicativi/GetData.php"
-)
-
-
-async def get_device_data(
-    email: str,
-    password: str,
-    device_id: str,
-    type_code: int,
-    extra: dict | None = None,
-) -> str:
-    """Invia POST all’API per un dato `type` e ritorna il body come testo."""
-    payload: dict[str, str | int] = {
-        "mail1": email,
-        "pwd1": password,
-        "code": device_id,
-        "type": type_code,
-    }
-    if extra:
-        payload.update(extra)
-    _LOGGER.debug("API request type=%s for %s, extra=%s", type_code, device_id, extra)
-    async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.post(API_ENDPOINT, data=payload)
-        resp.raise_for_status()
-        _LOGGER.debug("API response type=%s: %s", type_code, resp.text.strip())
-        return resp.text
-
-
-async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
-) -> None:
-    """Setup della piattaforma climate per termostati."""
-    conf = hass.data[DOMAIN][entry.entry_id]
-    email = conf[CONF_EMAIL]
-    password = conf[CONF_PASSWORD]
-    device_code = conf[CONF_DEVICE_CODE]
-
-    _LOGGER.debug("Setting up thermostat for device %s", device_code)
-    try:
-        kind = (await get_device_data(email, password, device_code, 16)).strip().lower()
-        _LOGGER.info("Device %s kind: %s", device_code, kind)
-        if kind != "termostato":
-            return
-    except Exception as err:
-        _LOGGER.error("Cannot verify device type for %s: %s", device_code, err)
-        return
-
-    async def _async_update_data() -> dict[str, str]:
-        """Effettua Request 2 e Request 17 e ritorna entrambi in un dict."""
-        temp_text = await get_device_data(email, password, device_code, 2)
-        conn_text = await get_device_data(email, password, device_code, 17)
-        return {"temp": temp_text, "conn": conn_text}
-
-    coordinator: DataUpdateCoordinator[dict[str, str]] = DataUpdateCoordinator(
-        hass,
-        _LOGGER,
-        name=f"max_for_home_thermo_{device_code}",
-        update_interval=timedelta(seconds=3),
-        update_method=_async_update_data,
-    )
-
-    # Primo fetch
-    await coordinator.async_config_entry_first_refresh()
-
-    async_add_entities(
-        [MaxThermostatEntity(coordinator, email, password, device_code)],
-        update_before_add=False,
-    )
-    _LOGGER.debug("Thermostat entity added for device %s", device_code)
-
-
 class MaxThermostatEntity(CoordinatorEntity, ClimateEntity):
     """Entità termostato: temp, umidità, on/off, auto/manuale, connettività."""
 
@@ -221,21 +123,19 @@ class MaxThermostatEntity(CoordinatorEntity, ClimateEntity):
         self._last_seen: str | None = None
 
         _LOGGER.debug("Initialized MaxThermostatEntity %s", device_code)
-        # Inizializza già dai dati presi al primo refresh
         self._parse(self.coordinator.data)
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Called on coordinator update."""
-        _LOGGER.debug(
-            "Coordinator update for %s: %s", self._device_code, self.coordinator.data
-        )
-        self._parse(self.coordinator.data)
+        data = self.coordinator.data
+        _LOGGER.debug("Coordinator update for %s: %s", self._device_code, data)
+        self._parse(data)
         self.async_write_ha_state()
 
     def _parse(self, data: dict[str, str]) -> None:
-        """Estrae e aggiorna tutti i campi da Request 2 e 17."""
-        # Request 2 → temp?hum?target?on?auto
+        """Estrae temp, umidità, target, on/off, auto/manuale e stato connessione."""
+        # Request 2
         temp_parts = data["temp"].split("?")
         if len(temp_parts) >= 5:
             self._current_temperature = float(temp_parts[0])
@@ -255,7 +155,7 @@ class MaxThermostatEntity(CoordinatorEntity, ClimateEntity):
                 self._preset_mode,
             )
 
-        # Request 17 → conn?timestamp
+        # Request 17
         conn_parts = data["conn"].split("?")
         if len(conn_parts) >= 2:
             self._is_connected = conn_parts[0] == "1"
@@ -344,11 +244,7 @@ class MaxThermostatEntity(CoordinatorEntity, ClimateEntity):
             self._device_code,
         )
         await get_device_data(
-            self._email,
-            self._password,
-            self._device_code,
-            5,
-            extra={"TempDR": temp},
+            self._email, self._password, self._device_code, 5, extra={"TempDR": temp}
         )
         self._target_temperature = float(temp)
         self.async_write_ha_state()
