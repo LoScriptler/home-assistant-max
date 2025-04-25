@@ -123,7 +123,7 @@ class MaxThermostatEntity(CoordinatorEntity, ClimateEntity):
         self._last_seen: str | None = None
 
         _LOGGER.debug("Initialized MaxThermostatEntity for device: %s", device_code)
-        # parse iniziale dai dati forniti dal coordinator
+        # Parse iniziale dai dati dict forniti dal coordinator
         self._parse(self.coordinator.data)
 
     @callback
@@ -138,8 +138,8 @@ class MaxThermostatEntity(CoordinatorEntity, ClimateEntity):
         self.async_write_ha_state()
 
     def _parse(self, data: dict[str, str]) -> None:
-        """Estrae da data['temp'] e data['conn'] tutti i valori necessari."""
-        # dati temperatura/umidità/target/on/auto (richiesta 2)
+        """Estrae temperatura, umidità, setpoint, on/off, auto/manuale e stato connessione."""
+        # Richiesta 2 → dati temp/hum/target/on/auto
         temp_parts = data["temp"].split("?")
         if len(temp_parts) >= 5:
             self._current_temperature = float(temp_parts[0])
@@ -159,7 +159,7 @@ class MaxThermostatEntity(CoordinatorEntity, ClimateEntity):
                 self._preset_mode,
             )
 
-        # stato connessione (richiesta 17)
+        # Richiesta 17 → dati connessione
         conn_parts = data["conn"].split("?")
         if len(conn_parts) >= 2:
             self._is_connected = conn_parts[0] == "1"
@@ -204,7 +204,7 @@ class MaxThermostatEntity(CoordinatorEntity, ClimateEntity):
         }
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        """Accende (4) o spegne (3) il termostato."""
+        """Richiesta 4 (acceso) o 3 (spegnimento)."""
         type_code = 4 if hvac_mode == HVACMode.HEAT else 3
         _LOGGER.debug(
             "Setting HVAC mode %s (type=%s) on device %s",
@@ -257,4 +257,3 @@ class MaxThermostatEntity(CoordinatorEntity, ClimateEntity):
         self._target_temperature = float(temp)
         self.async_write_ha_state()
         _LOGGER.info("Target temperature set to %s on device %s", temp, self._device_code)
-
