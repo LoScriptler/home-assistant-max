@@ -119,6 +119,8 @@ class MaxThermostatEntity(CoordinatorEntity, ClimateEntity):
         self._humidity: float | None = None
         self._hvac_mode: HVACMode = HVACMode.OFF
         self._preset_mode: str = "manual"
+        self._is_connected: bool = False
+        self._last_seen: str | None = None
 
         _LOGGER.debug("Initialized MaxThermostatEntity for device: %s", device_code)
 
@@ -149,6 +151,13 @@ class MaxThermostatEntity(CoordinatorEntity, ClimateEntity):
                 self._hvac_mode,
                 self._preset_mode,
             )
+        # parse connection status
+        conn_parts = parts["conn"].strip().split("?")
+        if len(conn_parts) >= 2:
+            self._connected = conn_parts[0] == "1"
+            self._last_seen = conn_parts[1]
+
+        self.async_write_ha_state()
 
     @property
     def temperature_unit(self) -> str:
@@ -176,7 +185,11 @@ class MaxThermostatEntity(CoordinatorEntity, ClimateEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        return {"humidity": self._humidity}
+        return {
+            "humidity": self._humidity,
+            "connected": self._connected,
+            "last_seen": self._last_seen,
+        }
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Accende (4) o spegne (3) il termostato."""
