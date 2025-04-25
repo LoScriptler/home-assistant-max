@@ -101,8 +101,10 @@ class MaxThermostatEntity(ClimateEntity):
         return self._current_temperature
 
     @property
-    def humidity(self) -> float | None:
+    def current_humidity(self) -> float | None:
+        """Umidità attuale, mostrata dal climate card."""
         return self._humidity
+
 
     @property
     def target_temperature(self) -> float | None:
