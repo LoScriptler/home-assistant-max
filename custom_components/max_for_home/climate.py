@@ -91,6 +91,7 @@ class MaxThermostatEntity(ClimateEntity):
         self._target_temperature: float | None = None
         self._humidity: float | None = None
         self._hvac_mode: HVACMode = HVACMode.OFF
+        self._preset_mode: str = "manual"
 
     @property
     def temperature_unit(self) -> str:
@@ -113,6 +114,10 @@ class MaxThermostatEntity(ClimateEntity):
     @property
     def hvac_mode(self) -> HVACMode:
         return self._hvac_mode
+    
+    @property
+    def preset_mode(self) -> str | None:
+        return self._preset_mode
 
     async def async_update(self) -> None:
         """Richiesta 2: ottiene 'temp?hum?target?on?auto' e aggiorna stato."""
@@ -128,6 +133,7 @@ class MaxThermostatEntity(ClimateEntity):
                 self._hvac_mode = (
                     HVACMode.HEAT if parts[3] == "1" else HVACMode.OFF
                 )
+                self._preset_mode = "auto" if parts[4] == "1" else "manual"
         except Exception as err:
             _LOGGER.error("Errore update termostato %s: %s", self._device_code, err)
 
@@ -143,6 +149,24 @@ class MaxThermostatEntity(ClimateEntity):
         except Exception as err:
             _LOGGER.error(
                 "Errore set HVAC mode %s a %s: %s", self._device_code, hvac_mode, err
+            )
+    
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
+        """Richiesta 11: imposta modalità auto/manuale (man_auto)."""
+        man_auto = 1 if preset_mode == "auto" else 0
+        try:
+            await get_device_data(
+                self._email,
+                self._password,
+                self._device_code,
+                11,
+                extra={"man_auto": man_auto},
+            )
+            self._preset_mode = preset_mode
+            self.async_write_ha_state()
+        except Exception as err:
+            _LOGGER.error(
+                "Errore set preset_mode %s a %s: %s", self._device_code, preset_mode, err
             )
 
     async def async_set_temperature(self, **kwargs) -> None:
