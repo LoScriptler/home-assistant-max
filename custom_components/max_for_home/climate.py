@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import Final
 
 import httpx
@@ -16,7 +17,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN, CONF_EMAIL, CONF_PASSWORD, CONF_DEVICE_CODE
 
 _LOGGER = logging.getLogger(__name__)
-# Endpoint API
+
 API_ENDPOINT: Final = (
     "https://munl.altervista.org/GestioneAccountMAX/GestioneApplicativi/GetData.php"
 )
@@ -70,6 +71,7 @@ async def async_setup_entry(
     async_add_entities(
         [MaxThermostatEntity(device_code, email, password)],
         update_before_add=False,
+        scan_interval=timedelta(seconds=3),
     )
 
 
@@ -111,6 +113,7 @@ class MaxThermostatEntity(ClimateEntity):
         return self._hvac_mode
 
     async def async_update(self) -> None:
+        """Richiesta 2: ottiene 'temp?hum?target?on?auto' e aggiorna stato."""
         try:
             resp = await get_device_data(
                 self._email, self._password, self._device_code, 2
@@ -127,6 +130,7 @@ class MaxThermostatEntity(ClimateEntity):
             _LOGGER.error("Errore update termostato %s: %s", self._device_code, err)
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
+        """Richiesta 4 (acceso) o 3 (spegnimento)."""
         type_code = 4 if hvac_mode == HVACMode.HEAT else 3
         try:
             await get_device_data(
@@ -136,10 +140,11 @@ class MaxThermostatEntity(ClimateEntity):
             self.async_write_ha_state()
         except Exception as err:
             _LOGGER.error(
-                "Errore set HVAC mode %s su %s: %s", self._device_code, hvac_mode, err
+                "Errore set HVAC mode %s a %s: %s", self._device_code, hvac_mode, err
             )
 
     async def async_set_temperature(self, **kwargs) -> None:
+        """Richiesta 5: imposta la temperatura target (POST 'TempDR')."""
         temp = kwargs.get("temperature")
         if temp is None:
             return
