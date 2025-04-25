@@ -91,7 +91,7 @@ async def async_setup_entry(
 
 
 class MaxThermostatEntity(CoordinatorEntity, ClimateEntity):
-    """Entità termostato: temperatura, umidità, on/off, auto/manuale e target."""
+    """Entità termostato: temperatura, umidità, on/off, auto/manuale e stato di connessione."""
 
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
@@ -101,7 +101,7 @@ class MaxThermostatEntity(CoordinatorEntity, ClimateEntity):
 
     def __init__(
         self,
-        coordinator: DataUpdateCoordinator[str],
+        coordinator: DataUpdateCoordinator[dict[str, str]],
         email: str,
         password: str,
         device_code: str,
@@ -123,25 +123,32 @@ class MaxThermostatEntity(CoordinatorEntity, ClimateEntity):
         self._last_seen: str | None = None
 
         _LOGGER.debug("Initialized MaxThermostatEntity for device: %s", device_code)
-
-        # Parse iniziale
-        self._parse(coordinator.data)
+        # parse iniziale dai dati forniti dal coordinator
+        self._parse(self.coordinator.data)
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        """Quando il coordinator riceve nuovi dati, li estrae."""
-        _LOGGER.debug("Coordinator update for device %s: %s", self._device_code, self.coordinator.data)
+        """Viene chiamato ad ogni update del coordinator."""
+        _LOGGER.debug(
+            "Coordinator update for device %s: %s",
+            self._device_code,
+            self.coordinator.data,
+        )
         self._parse(self.coordinator.data)
         self.async_write_ha_state()
 
-    def _parse(self, text: str) -> None:
-        parts = text.strip().split("?")
-        if len(parts) >= 5:
-            self._current_temperature = float(parts[0])
-            self._humidity = float(parts[1])
-            self._target_temperature = float(parts[2])
-            self._hvac_mode = HVACMode.HEAT if parts[3] == "1" else HVACMode.OFF
-            self._preset_mode = "auto" if parts[4] == "1" else "manual"
+    def _parse(self, data: dict[str, str]) -> None:
+        """Estrae da data['temp'] e data['conn'] tutti i valori necessari."""
+        # dati temperatura/umidità/target/on/auto (richiesta 2)
+        temp_parts = data["temp"].split("?")
+        if len(temp_parts) >= 5:
+            self._current_temperature = float(temp_parts[0])
+            self._humidity = float(temp_parts[1])
+            self._target_temperature = float(temp_parts[2])
+            self._hvac_mode = (
+                HVACMode.HEAT if temp_parts[3] == "1" else HVACMode.OFF
+            )
+            self._preset_mode = "auto" if temp_parts[4] == "1" else "manual"
             _LOGGER.info(
                 "Parsed thermostat %s: temp=%s, hum=%s, target=%s, hvac=%s, preset=%s",
                 self._device_code,
@@ -151,13 +158,18 @@ class MaxThermostatEntity(CoordinatorEntity, ClimateEntity):
                 self._hvac_mode,
                 self._preset_mode,
             )
-        # parse connection status
-        conn_parts = parts["conn"].strip().split("?")
-        if len(conn_parts) >= 2:
-            self._connected = conn_parts[0] == "1"
-            self._last_seen = conn_parts[1]
 
-        self.async_write_ha_state()
+        # stato connessione (richiesta 17)
+        conn_parts = data["conn"].split("?")
+        if len(conn_parts) >= 2:
+            self._is_connected = conn_parts[0] == "1"
+            self._last_seen = conn_parts[1]
+            _LOGGER.info(
+                "Connection state for %s: connected=%s, last_seen=%s",
+                self._device_code,
+                self._is_connected,
+                self._last_seen,
+            )
 
     @property
     def temperature_unit(self) -> str:
@@ -187,62 +199,62 @@ class MaxThermostatEntity(CoordinatorEntity, ClimateEntity):
     def extra_state_attributes(self) -> dict:
         return {
             "humidity": self._humidity,
-            "connected": self._connected,
+            "connected": self._is_connected,
             "last_seen": self._last_seen,
         }
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Accende (4) o spegne (3) il termostato."""
         type_code = 4 if hvac_mode == HVACMode.HEAT else 3
-        _LOGGER.debug("Setting HVAC mode %s (type=%s) on device %s", hvac_mode, type_code, self._device_code)
-        try:
-            await get_device_data(self._email, self._password, self._device_code, type_code)
-            self._hvac_mode = hvac_mode
-            self.async_write_ha_state()
-            _LOGGER.info("HVAC mode set to %s on device %s", hvac_mode, self._device_code)
-        except Exception as err:
-            _LOGGER.error(
-                "Errore set HVAC mode %s a %s: %s", self._device_code, hvac_mode, err
-            )
+        _LOGGER.debug(
+            "Setting HVAC mode %s (type=%s) on device %s",
+            hvac_mode,
+            type_code,
+            self._device_code,
+        )
+        await get_device_data(self._email, self._password, self._device_code, type_code)
+        self._hvac_mode = hvac_mode
+        self.async_write_ha_state()
+        _LOGGER.info("HVAC mode set to %s on device %s", hvac_mode, self._device_code)
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Richiesta 11: imposta auto/manuale (man_auto)."""
         man_auto = 1 if preset_mode == "auto" else 0
-        _LOGGER.debug("Setting preset_mode=%s (man_auto=%s) on device %s", preset_mode, man_auto, self._device_code)
-        try:
-            await get_device_data(
-                self._email,
-                self._password,
-                self._device_code,
-                11,
-                extra={"man_auto": man_auto},
-            )
-            self._preset_mode = preset_mode
-            self.async_write_ha_state()
-            _LOGGER.info("Preset mode set to %s on device %s", preset_mode, self._device_code)
-        except Exception as err:
-            _LOGGER.error(
-                "Errore set preset_mode %s a %s: %s", self._device_code, preset_mode, err
-            )
+        _LOGGER.debug(
+            "Setting preset_mode=%s (man_auto=%s) on device %s",
+            preset_mode,
+            man_auto,
+            self._device_code,
+        )
+        await get_device_data(
+            self._email,
+            self._password,
+            self._device_code,
+            11,
+            extra={"man_auto": man_auto},
+        )
+        self._preset_mode = preset_mode
+        self.async_write_ha_state()
+        _LOGGER.info("Preset mode set to %s on device %s", preset_mode, self._device_code)
 
     async def async_set_temperature(self, **kwargs) -> None:
         """Richiesta 5: imposta la temperatura target."""
         temp = kwargs.get("temperature")
         if temp is None:
             return
-        _LOGGER.debug("Setting temperature target=%s (type=5) on device %s", temp, self._device_code)
-        try:
-            await get_device_data(
-                self._email,
-                self._password,
-                self._device_code,
-                5,
-                extra={"TempDR": temp},
-            )
-            self._target_temperature = float(temp)
-            self.async_write_ha_state()
-            _LOGGER.info("Target temperature set to %s on device %s", temp, self._device_code)
-        except Exception as err:
-            _LOGGER.error(
-                "Errore set temperature %s a %s: %s", self._device_code, temp, err
-            )
+        _LOGGER.debug(
+            "Setting temperature target=%s (type=5) on device %s",
+            temp,
+            self._device_code,
+        )
+        await get_device_data(
+            self._email,
+            self._password,
+            self._device_code,
+            5,
+            extra={"TempDR": temp},
+        )
+        self._target_temperature = float(temp)
+        self.async_write_ha_state()
+        _LOGGER.info("Target temperature set to %s on device %s", temp, self._device_code)
+
