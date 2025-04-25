@@ -6,5 +6,6 @@
   "requirements": [],     
   "codeowners": ["@LoScriptler"],
   "iot_class": "cloud_push",
+  "platforms": ["button", "climate"],
   "config_flow": true        
 }

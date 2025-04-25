@@ -10,6 +10,7 @@ from homeassistant.helpers.typing import ConfigType, HomeAssistantType
 
 from .const import DOMAIN, PLATFORMS
 
+
 _LOGGER = logging.getLogger(__name__)
 
 
