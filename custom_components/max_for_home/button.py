@@ -76,15 +76,18 @@ async def get_device_data(
     password: str,
     device_id: str,
     type_code: int,
+    extra: dict | None = None,
 ) -> httpx.Response:
-    """Invia richiesta HTTP POST verso l'API per il tipo specificato."""
-    _LOGGER.debug("Request type %s for device %s", type_code, device_id)
-    data = {
+    """Invia una richiesta POST all'API per il tipo specificato."""
+    _LOGGER.debug("Request type=%s for device %s", type_code, device_id)
+    data: dict[str, str | int] = {
         "mail1": email,
         "pwd1": password,
         "code": device_id,
         "type": type_code,
     }
+    if extra:
+        data.update(extra)
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.post(API_ENDPOINT, data=data)
         resp.raise_for_status()
@@ -195,10 +198,10 @@ class MaxDoorButton(ButtonEntity):
 
 
 class MaxThermostatEntity(ClimateEntity):
-    """Entità unica per il termostato: temperatura, umidità, accendi/spegni e target."""
+    """Unica entità per il termostato: temperatura, umidità, accendi/spegni e target."""
 
     _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
-    _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]
+    _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
 
     def __init__(self, device_code: str, email: str, password: str) -> None:
         self._device_code = device_code
@@ -209,68 +212,67 @@ class MaxThermostatEntity(ClimateEntity):
         self._current_temperature: float | None = None
         self._target_temperature: float | None = None
         self._humidity: float | None = None
-        self._hvac_mode = HVACMode.OFF
+        self._hvac_mode: HVACMode = HVACMode.OFF
+
+    @property
+    def temperature_unit(self) -> str:
+        """Unità di misura della temperatura da configurazione HA."""
+        return self.hass.config.units.temperature_unit
 
     @property
     def current_temperature(self) -> float | None:
         return self._current_temperature
 
     @property
-    def humidity(self) -> float | None:
+    def current_humidity(self) -> float | None:
         return self._humidity
-
-    @property
-    def hvac_mode(self) -> HVACMode:
-        return self._hvac_mode
 
     @property
     def target_temperature(self) -> float | None:
         return self._target_temperature
 
+    @property
+    def hvac_mode(self) -> HVACMode:
+        return self._hvac_mode
+
     async def async_update(self) -> None:
+        """Richiesta 2: ottiene 'temp?hum?target?on?auto' e aggiorna stato."""
         try:
-            resp = await get_device_data(
-                self._email, self._password, self._device_code, 30
-            )
-            data = resp.json()
-            self._current_temperature = data.get("temperature")
-            self._humidity = data.get("humidity")
+            resp = await get_device_data(self._email, self._password, self._device_code, 2)
+            parts = resp.text.strip().split("?")
+            if len(parts) >= 5:
+                self._current_temperature = float(parts[0])
+                self._humidity = float(parts[1])
+                self._target_temperature = float(parts[2])
+                self._hvac_mode = HVACMode.HEAT if parts[3] == "1" else HVACMode.OFF
+                # parts[4] = auto (1) / manuale (0) – se vuoi usarlo, salvalo qui
         except Exception as err:
-            _LOGGER.error(
-                "Errore update termostato %s: %s",
-                self._device_code,
-                err,
-            )
+            _LOGGER.error("Errore update termostato %s: %s", self._device_code, err)
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
+        """Richiesta 4 (accesо) o 3 (spegnimento)."""
+        type_code = 4 if hvac_mode == HVACMode.HEAT else 3
         try:
-            await get_device_data(
-                self._email, self._password, self._device_code, 30
-            )
+            await get_device_data(self._email, self._password, self._device_code, type_code)
             self._hvac_mode = hvac_mode
             self.async_write_ha_state()
         except Exception as err:
-            _LOGGER.error(
-                "Errore set HVAC mode %s al %s: %s",
-                self._device_code,
-                hvac_mode,
-                err,
-            )
+            _LOGGER.error("Errore set HVAC mode %s a %s: %s", self._device_code, hvac_mode, err)
 
     async def async_set_temperature(self, **kwargs) -> None:
+        """Richiesta 5: imposta la temperatura target (POST 'TempDR')."""
         temp = kwargs.get("temperature")
         if temp is None:
             return
         try:
             await get_device_data(
-                self._email, self._password, self._device_code, 30
+                self._email,
+                self._password,
+                self._device_code,
+                5,
+                extra={"TempDR": temp},
             )
-            self._target_temperature = temp
+            self._target_temperature = float(temp)
             self.async_write_ha_state()
         except Exception as err:
-            _LOGGER.error(
-                "Errore set temperature %s a %s: %s",
-                self._device_code,
-                temp,
-                err,
-            )
+            _LOGGER.error("Errore set temperature %s a %s: %s", self._device_code, temp, err)
