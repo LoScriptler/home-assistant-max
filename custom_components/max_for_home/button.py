@@ -71,6 +71,24 @@ async def post_max(email: str, password: str, device_id: str, type: str) -> http
         )
         raise
 
+async def get_device_data(
+    email: str,
+    password: str,
+    device_id: str,
+    type_code: int,
+) -> httpx.Response:
+    """Invia richiesta HTTP POST verso l'API per il tipo specificato."""
+    _LOGGER.debug("Request type %s for device %s", type_code, device_id)
+    data = {
+        "mail1": email,
+        "pwd1": password,
+        "code": device_id,
+        "type": type_code,
+    }
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.post(API_ENDPOINT, data=data)
+        resp.raise_for_status()
+        return resp
 
 async def post_switch(email: str, password: str, device_id: str) -> httpx.Response:
     """HTTP Request per commutare un interruttore (type=4)."""
@@ -174,8 +192,10 @@ class MaxDoorButton(ButtonEntity):
 
 
 class MaxThermostatEntity(ClimateEntity):
+    """Entità unica per il termostato: temperatura, umidità, accendi/spegni e target."""
+
     _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
-    _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
+    _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]
 
     def __init__(self, device_code: str, email: str, password: str) -> None:
         self._device_code = device_code
@@ -183,10 +203,10 @@ class MaxThermostatEntity(ClimateEntity):
         self._password = password
         self._attr_unique_id = f"thermostat_{device_code}"
         self._attr_name = f"Termostato {device_code}"
-        self._current_temperature = None
-        self._target_temperature = None
-        self._humidity = None
-        self._hvac_mode = HVAC_MODE_OFF
+        self._current_temperature: float | None = None
+        self._target_temperature: float | None = None
+        self._humidity: float | None = None
+        self._hvac_mode = HVACMode.OFF
 
     @property
     def current_temperature(self) -> float | None:
@@ -197,35 +217,57 @@ class MaxThermostatEntity(ClimateEntity):
         return self._humidity
 
     @property
-    def hvac_mode(self) -> str:
+    def hvac_mode(self) -> HVACMode:
         return self._hvac_mode
 
     @property
     def target_temperature(self) -> float | None:
         return self._target_temperature
 
-    # async def async_update(self) -> None:
-    #     # Recupera dati: tipo=16
-    #     resp = await get_device_data(self._email, self._password, self._device_code, 16)
-    #     data = resp.json()
-    #     self._current_temperature = data.get("temperature")
-    #     self._humidity = data.get("humidity")
+    async def async_update(self) -> None:
+        try:
+            resp = await get_device_data(
+                self._email, self._password, self._device_code, 30
+            )
+            data = resp.json()
+            self._current_temperature = data.get("temperature")
+            self._humidity = data.get("humidity")
+        except Exception as err:
+            _LOGGER.error(
+                "Errore update termostato %s: %s",
+                self._device_code,
+                err,
+            )
 
-    # async def async_set_hvac_mode(self, hvac_mode: str) -> None:
-    #     if hvac_mode == HVAC_MODE_HEAT:
-    #         # accendi: utiliza type=4
-    #         await get_device_data(self._email, self._password, self._device_code, 4)
-    #     else:
-    #         # spegni: type=4 ma forse payload diverso se richiesto
-    #         await get_device_data(self._email, self._password, self._device_code, 4)
-    #     self._hvac_mode = hvac_mode
-    #     self.async_write_ha_state()
+    async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
+        try:
+            await get_device_data(
+                self._email, self._password, self._device_code, 30
+            )
+            self._hvac_mode = hvac_mode
+            self.async_write_ha_state()
+        except Exception as err:
+            _LOGGER.error(
+                "Errore set HVAC mode %s al %s: %s",
+                self._device_code,
+                hvac_mode,
+                err,
+            )
 
-    # async def async_set_temperature(self, **kwargs) -> None:
-    #     # Se supportato, invia nuova temperatura target via API, se endpoint lo supporta
-    #     temp = kwargs.get("temperature")
-    #     if temp is not None:
-    #         # type=5 ad esempio per set temperature (modifica se necessario)
-    #         await get_device_data(self._email, self._password, self._device_code, 5)
-    #         self._target_temperature = temp
-    #         self.async_write_ha_state()
+    async def async_set_temperature(self, **kwargs) -> None:
+        temp = kwargs.get("temperature")
+        if temp is None:
+            return
+        try:
+            await get_device_data(
+                self._email, self._password, self._device_code, 30
+            )
+            self._target_temperature = temp
+            self.async_write_ha_state()
+        except Exception as err:
+            _LOGGER.error(
+                "Errore set temperature %s a %s: %s",
+                self._device_code,
+                temp,
+                err,
+            )
