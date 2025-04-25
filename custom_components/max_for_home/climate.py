@@ -16,7 +16,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN, CONF_EMAIL, CONF_PASSWORD, CONF_DEVICE_CODE
 
 _LOGGER = logging.getLogger(__name__)
-API_ENDPOINT: Final = "https://munl.altervista.org/.../GetData.php"
+# Endpoint API
+API_ENDPOINT: Final = (
+    "https://munl.altervista.org/GestioneAccountMAX/GestioneApplicativi/GetData.php"
+)
 
 
 async def kind_verify(email: str, password: str, device_id: str) -> httpx.Response:
