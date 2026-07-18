@@ -6,7 +6,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.typing import ConfigType, HomeAssistantType
+from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN, PLATFORMS
 
@@ -14,7 +14,7 @@ from .const import DOMAIN, PLATFORMS
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup(hass: HomeAssistantType, config: ConfigType) -> bool:
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Setup placeholder (richiesto da HA, anche se usiamo solo config‑flow)."""
     return True
 
